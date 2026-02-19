@@ -77,15 +77,16 @@ function connect() {
                 camera.zoom += (tz - camera.zoom) * 0.03;
             }
 
-            // Leaderboard
-            const sorted = stateSnakes.slice().sort((a, b) => b.score - a.score).slice(0, 10);
-            let html = '';
-            for (let i = 0; i < sorted.length; i++) {
-                const s = sorted[i];
-                const cls = s.isMe ? 'lb-entry me' : 'lb-entry';
-                html += `<div class="${cls}"><span>${i+1}. ${esc(s.name)}</span><span>${s.score}</span></div>`;
+            // Global leaderboard from server
+            if (msg.lb) {
+                let html = '';
+                for (let i = 0; i < msg.lb.length; i++) {
+                    const e = msg.lb[i]; // [id, name, score, paletteIdx]
+                    const cls = e[0] === msg.y ? 'lb-entry me' : 'lb-entry';
+                    html += `<div class="${cls}"><span>${i+1}. ${esc(e[1])}</span><span>${e[2]}</span></div>`;
+                }
+                lbList.innerHTML = html;
             }
-            lbList.innerHTML = html;
             if (me) scoreEl.textContent = `Score: ${me.score}  |  Length: ${me.len}`;
             const pc = stateSnakes.filter(s => s.id.startsWith('p_')).length;
             onlineCountEl.textContent = `${pc} player(s) online`;

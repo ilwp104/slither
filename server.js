@@ -373,8 +373,14 @@ function notifyDeath(snake) {
     }
 }
 
-// Pre-allocate reusable buffer for state messages
 function broadcastState() {
+    // Global leaderboard — same for ALL clients
+    const allAlive = [...snakes.values()].filter(s => s.alive);
+    const lb = allAlive
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 10)
+        .map(s => [s.id, s.name, s.score, s.paletteIdx]);
+
     for (const [, client] of clients) {
         const snake = snakes.get(client.snakeId);
         if (!snake) continue;
@@ -384,19 +390,16 @@ function broadcastState() {
 
         // Nearby snakes — compact format
         const ns = [];
-        for (const [, s] of snakes) {
-            if (!s.alive) continue;
+        for (const s of allAlive) {
             const dx = s.x - px, dy = s.y - py;
             if (dx > VIEW_RANGE || dx < -VIEW_RANGE || dy > VIEW_RANGE || dy < -VIEW_RANGE) continue;
 
-            // Subsample segments
             const segs = [];
             const step = Math.max(1, (s.segments.length / 60) | 0);
             for (let i = 0; i < s.segments.length; i += step) {
                 segs.push((s.segments[i].x + 0.5) | 0);
                 segs.push((s.segments[i].y + 0.5) | 0);
             }
-            // Always include tail
             const last = s.segments[s.segments.length - 1];
             segs.push((last.x + 0.5) | 0);
             segs.push((last.y + 0.5) | 0);
@@ -421,6 +424,7 @@ function broadcastState() {
             s: ns,
             f: nf,
             y: client.snakeId,
+            lb: lb,
         }));
     }
 }
