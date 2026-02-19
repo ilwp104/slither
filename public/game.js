@@ -18,6 +18,9 @@ const finalScoreEl  = document.getElementById('finalScore');
 const retryBtn      = document.getElementById('retryBtn');
 const onlineCountEl = document.getElementById('onlineCount');
 const pingEl        = document.getElementById('ping');
+const homeBtn       = document.getElementById('homeBtn');
+const highScoreStartEl = document.getElementById('highScoreStart');
+const highScoreOverEl  = document.getElementById('highScoreOver');
 
 // --- State ---
 let ws = null;
@@ -33,6 +36,7 @@ let isBoosting = false;
 let connected = false;
 let playing = false;
 let playerName = 'Player';
+let highScore = parseInt(localStorage.getItem('highScore')) || 0;
 const GRID_SIZE = 80;
 
 // ============================================================
@@ -96,6 +100,11 @@ function connect() {
         if (msg.t === 'd') {
             playing = false;
             finalScoreEl.textContent = `Score: ${msg.sc}  |  Length: ${msg.l}`;
+            if (msg.sc > highScore) {
+                highScore = msg.sc;
+                localStorage.setItem('highScore', highScore);
+            }
+            highScoreOverEl.textContent = `Best: ${highScore}`;
             setTimeout(() => {
                 gameOverEl.style.display = 'flex';
                 document.body.style.cursor = 'default';
@@ -122,6 +131,7 @@ setInterval(() => {
 
 playBtn.addEventListener('click', joinGame);
 retryBtn.addEventListener('click', respawnGame);
+homeBtn.addEventListener('click', goHome);
 nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') joinGame(); });
 function joinGame() {
     playerName = nameInput.value.trim() || 'Player';
@@ -132,6 +142,15 @@ function respawnGame() {
     gameOverEl.style.display = 'none';
     if (!connected) { connect(); setTimeout(respawnGame, 500); return; }
     ws.send(JSON.stringify({ type: 'respawn', name: playerName }));
+}
+function goHome() {
+    playing = false;
+    hudEl.style.display = 'none';
+    gameOverEl.style.display = 'none';
+    startScreen.style.display = 'flex';
+    document.body.style.cursor = 'default';
+    highScoreStartEl.textContent = highScore > 0 ? `Best: ${highScore}` : '';
+    if (ws && ws.readyState === 1) ws.close();
 }
 
 // ============================================================
@@ -432,4 +451,5 @@ function esc(s) { const d = document.createElement('div'); d.textContent = s; re
 // ============================================================
 connect();
 nameInput.focus();
+if (highScore > 0) highScoreStartEl.textContent = `Best: ${highScore}`;
 loop();

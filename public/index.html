@@ -78,6 +78,16 @@
             position: absolute; bottom: 24px; left: 20px;
             color: rgba(255,255,255,0.4); font-size: 11px;
         }
+        #homeBtn {
+            position: absolute; top: 20px; left: 20px;
+            padding: 8px 16px; font-size: 14px; font-weight: bold;
+            background: rgba(0,0,0,0.55); color: #fff;
+            border: 1px solid rgba(255,255,255,0.2); border-radius: 8px;
+            cursor: pointer; pointer-events: auto;
+            backdrop-filter: blur(4px); transition: all 0.2s;
+        }
+        #homeBtn:hover { background: rgba(124,77,255,0.4); border-color: #7c4dff; }
+        .high-score { color: #ffd700; font-size: 16px; margin-top: 8px; }
 
         /* ---- Game Over ---- */
         #gameOver {
@@ -137,6 +147,7 @@
             Mouse &mdash; Move direction<br>
             Left Click / Space &mdash; Boost
         </div>
+        <div id="highScoreStart" class="high-score"></div>
         <div id="onlineCount"></div>
 
         <!-- Ad: Start Screen Banner (728x90) -->
@@ -147,6 +158,7 @@
     </div>
 
     <div id="hud">
+        <button id="homeBtn">&#8592; HOME</button>
         <div id="score">Score: 0</div>
         <div id="leaderboard">
             <h3>LEADERBOARD</h3>
@@ -165,6 +177,7 @@
     <div id="gameOver">
         <h2>GAME OVER</h2>
         <div class="final-score" id="finalScore"></div>
+        <div id="highScoreOver" class="high-score"></div>
 
         <!-- Ad: Game Over (336x280) -->
         <div id="ad-gameover" class="ad-slot">
