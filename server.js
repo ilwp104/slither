@@ -248,10 +248,28 @@ function initWorld() {
     for (let i = 0; i < AI_COUNT; i++) spawnAI();
 }
 
-function spawnAI() {
+function spawnAI(nearPlayer) {
     const id = 'ai_' + nextId++;
     const name = AI_NAMES[(Math.random() * AI_NAMES.length) | 0];
     const s = new Snake(id, name, true);
+
+    // 50% chance to spawn near a random player so there's always activity nearby
+    if (nearPlayer || Math.random() < 0.5) {
+        const players = [...snakes.values()].filter(p => !p.isAI && p.alive);
+        if (players.length > 0) {
+            const p = players[Math.floor(Math.random() * players.length)];
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 800 + Math.random() * 1200; // 800~2000px away
+            const nx = Math.max(200, Math.min(WORLD_SIZE - 200, p.x + Math.cos(angle) * dist));
+            const ny = Math.max(200, Math.min(WORLD_SIZE - 200, p.y + Math.sin(angle) * dist));
+            // Reposition all segments
+            for (let i = 0; i < s.segments.length; i++) {
+                s.segments[i].x = nx - i * SEG_GAP * Math.cos(s.angle);
+                s.segments[i].y = ny - i * SEG_GAP * Math.sin(s.angle);
+            }
+        }
+    }
+
     s.grow(Math.floor(Math.random() * 60));
     snakes.set(id, s);
 }
@@ -319,15 +337,22 @@ function tick() {
         }
     }
 
-    // Cleanup dead AI
+    // Cleanup dead snakes (collect first, then delete)
+    const deadIds = [];
     for (const [id, s] of snakes) {
-        if (!s.alive && s.isAI) snakes.delete(id);
+        if (!s.alive && s.isAI) deadIds.push(id);
+    }
+    for (const id of deadIds) snakes.delete(id);
+
+    // Also clean dead player snakes that disconnected
+    for (const [id, s] of snakes) {
+        if (!s.alive && !s.isAI && !clients.has(id)) snakes.delete(id);
     }
 
-    // Respawn AI
+    // Respawn AI — always maintain AI_COUNT alive AIs
     let aiAlive = 0;
     for (const [, s] of snakes) if (s.isAI && s.alive) aiAlive++;
-    while (aiAlive < AI_COUNT) { spawnAI(); aiAlive++; }
+    while (aiAlive < AI_COUNT) { spawnAI(true); aiAlive++; }
 
     // Replenish food
     while (foods.length < FOOD_COUNT) addFood();
