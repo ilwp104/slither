@@ -99,8 +99,13 @@ class Snake {
                 y: cy - i * SEG_GAP * Math.sin(this.angle),
             });
         }
+        this.kills = 0;
         this.aiTimer = 0;
         this.aiWanderAngle = this.angle;
+        this.aiTargetFoodId = null;
+        this.aiCircleTotal = 0;
+        this.aiLastAngleToTarget = null;
+        this.aiRetreatTimer = 0;
     }
 
     get x() { return this.segments[0].x; }
@@ -122,13 +127,11 @@ class Snake {
             x: this.segments[0].x + Math.cos(this.angle) * this.speed,
             y: this.segments[0].y + Math.sin(this.angle) * this.speed,
         };
-        const m = 150;
-        if (head.x < m) head.x += (m - head.x) * 0.1;
-        if (head.y < m) head.y += (m - head.y) * 0.1;
-        if (head.x > WORLD_SIZE - m) head.x -= (head.x - (WORLD_SIZE - m)) * 0.1;
-        if (head.y > WORLD_SIZE - m) head.y -= (head.y - (WORLD_SIZE - m)) * 0.1;
-        head.x = Math.max(10, Math.min(WORLD_SIZE - 10, head.x));
-        head.y = Math.max(10, Math.min(WORLD_SIZE - 10, head.y));
+        // Die at world boundary
+        if (head.x <= 5 || head.x >= WORLD_SIZE - 5 || head.y <= 5 || head.y >= WORLD_SIZE - 5) {
+            this.die();
+            return;
+        }
 
         this.segments.unshift(head);
         if (this.boosting && this.length > 20) {
@@ -164,6 +167,7 @@ class Snake {
             this.targetAngle = Math.atan2(cy - this.y, cx - this.x);
             this.aiTimer = 60;
             this.boosting = false;
+            this.aiTargetFoodId = null;
             return;
         }
         // Danger check
@@ -175,11 +179,19 @@ class Snake {
                 this.targetAngle = Math.atan2(dy, dx) + (Math.random() - 0.5) * 0.5;
                 this.boosting = this.length > 25;
                 this.aiTimer = 30;
+                this.aiTargetFoodId = null;
                 danger = true;
                 break;
             }
         }
         if (danger) return;
+
+        // Retreat mode: move away before retrying
+        if (this.aiRetreatTimer > 0) {
+            this.aiRetreatTimer--;
+            this.boosting = false;
+            return;
+        }
 
         if (this.aiTimer <= 0) {
             this.boosting = false;
@@ -187,15 +199,42 @@ class Snake {
             let best = null, bestD2 = 90000;
             const minD2 = 400; // ignore food closer than 20px (already eating it)
             for (const f of foods) {
+                if (f.id === this.aiTargetFoodId && this.aiRetreatTimer <= 0) continue; // skip food we just retreated from
                 const dx = this.x - f.x, dy = this.y - f.y;
                 const d2 = dx * dx + dy * dy;
                 if (d2 > minD2 && d2 < bestD2) { bestD2 = d2; best = f; }
             }
             if (best) {
-                // Aim slightly ahead with random offset to avoid orbiting
-                this.targetAngle = Math.atan2(best.y - this.y, best.x - this.x) + (Math.random() - 0.5) * 0.3;
+                const angleToFood = Math.atan2(best.y - this.y, best.x - this.x);
+                // Track circling: if targeting same food, accumulate angle change
+                if (best.id === this.aiTargetFoodId && this.aiLastAngleToTarget !== null) {
+                    let delta = angleToFood - this.aiLastAngleToTarget;
+                    while (delta > Math.PI) delta -= Math.PI * 2;
+                    while (delta < -Math.PI) delta += Math.PI * 2;
+                    this.aiCircleTotal += Math.abs(delta);
+                    // 2 full circles = 4π
+                    if (this.aiCircleTotal > Math.PI * 4) {
+                        // Retreat: move away from food
+                        this.targetAngle = angleToFood + Math.PI + (Math.random() - 0.5) * 0.8;
+                        this.aiRetreatTimer = 40 + Math.random() * 20;
+                        this.aiTimer = this.aiRetreatTimer + 5;
+                        this.aiCircleTotal = 0;
+                        this.aiTargetFoodId = null;
+                        this.aiLastAngleToTarget = null;
+                        return;
+                    }
+                } else {
+                    // New food target
+                    this.aiTargetFoodId = best.id;
+                    this.aiCircleTotal = 0;
+                }
+                this.aiLastAngleToTarget = angleToFood;
+                this.targetAngle = angleToFood + (Math.random() - 0.5) * 0.3;
                 this.aiTimer = 15 + Math.random() * 10;
             } else {
+                this.aiTargetFoodId = null;
+                this.aiCircleTotal = 0;
+                this.aiLastAngleToTarget = null;
                 this.aiWanderAngle += (Math.random() - 0.5) * 2.0;
                 this.targetAngle = this.aiWanderAngle;
                 this.aiTimer = 40 + Math.random() * 60;
@@ -328,6 +367,8 @@ function tick() {
                 if (entry.sid === snake.id) continue;
                 const dx = snake.x - entry.x, dy = snake.y - entry.y;
                 if (dx * dx + dy * dy < hr2) {
+                    const killer = snakes.get(entry.sid);
+                    if (killer && killer.alive) killer.kills++;
                     snake.die();
                     notifyDeath(snake);
                     break;
@@ -367,7 +408,7 @@ function notifyDeath(snake) {
     for (const [, client] of clients) {
         if (client.snakeId === snake.id) {
             safeSend(client.ws, JSON.stringify({
-                t: 'd', sc: snake.score, l: snake.length,
+                t: 'd', sc: snake.score, l: snake.length, k: snake.kills,
             }));
         }
     }
@@ -411,7 +452,7 @@ function broadcastState() {
 
             ns.push([
                 s.id, s.name, segs, s.paletteIdx, s.length,
-                ((s.angle * 100 + 0.5) | 0) / 100, s.boosting ? 1 : 0, s.score
+                ((s.angle * 100 + 0.5) | 0) / 100, s.boosting ? 1 : 0, s.score, s.kills
             ]);
         }
 
